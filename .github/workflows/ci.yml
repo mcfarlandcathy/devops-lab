@@ -7,6 +7,7 @@ on:
 
 jobs:
   test:
+    name: Test application
     runs-on: ubuntu-latest
 
     steps:
@@ -27,3 +28,25 @@ jobs:
       - name: Check JavaScript syntax
         working-directory: app
         run: node --check src/server.js
+
+      - name: Run API tests
+        working-directory: app
+        run: npm test
+
+  build-image:
+    name: Build Docker image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build image with Kaniko
+        uses: docker://gcr.io/kaniko-project/executor:v1.24.0
+        with:
+          args: >-
+            --context=dir://${{ gitverse.workspace }}/app
+            --dockerfile=${{ gitverse.workspace }}/app/Dockerfile
+            --destination=task-api:ci
+            --no-push
+            --verbosity=info
