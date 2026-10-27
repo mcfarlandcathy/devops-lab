@@ -30,61 +30,65 @@ async function initializeDatabase() {
   `);
 }
 
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+function createServer(database) {
+  return http.createServer(async (req, res) => {
+    const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
 
-  try {
-    if (req.method === "GET" && url.pathname === "/health") {
-      await pool.query("SELECT 1");
-      return sendJson(res, 200, {
-        status: "ok",
-        service: "task-api",
-        database: "connected",
-      });
-    }
+    try {
+      if (req.method === "GET" && url.pathname === "/health") {
+        await database.query("SELECT 1");
+        return sendJson(res, 200, {
+          status: "ok",
+          service: "task-api",
+          database: "connected",
+        });
+      }
 
-    if (req.method === "GET" && url.pathname === "/tasks") {
-      const result = await pool.query(
-        "SELECT id, title, completed FROM tasks ORDER BY id"
-      );
-      return sendJson(res, 200, result.rows);
-    }
+      if (req.method === "GET" && url.pathname === "/tasks") {
+        const result = await database.query(
+          "SELECT id, title, completed FROM tasks ORDER BY id"
+        );
+        return sendJson(res, 200, result.rows);
+      }
 
-    if (req.method === "POST" && url.pathname === "/tasks") {
-      let body = "";
+      if (req.method === "POST" && url.pathname === "/tasks") {
+        let body = "";
 
-      for await (const chunk of req) {
-        body += chunk;
-        if (body.length > 100_000) {
-          return sendJson(res, 413, { error: "Request body too large" });
+        for await (const chunk of req) {
+          body += chunk;
+          if (body.length > 100_000) {
+            return sendJson(res, 413, { error: "Request body too large" });
+          }
         }
+
+        let data;
+        try {
+          data = JSON.parse(body);
+        } catch {
+          return sendJson(res, 400, { error: "Invalid JSON" });
+        }
+
+        if (!data || typeof data.title !== "string" || !data.title.trim()) {
+          return sendJson(res, 400, { error: "Field 'title' is required" });
+        }
+
+        const result = await database.query(
+          "INSERT INTO tasks (title) VALUES ($1) RETURNING id, title, completed",
+          [data.title.trim()]
+        );
+
+        return sendJson(res, 201, result.rows[0]);
       }
 
-      let data;
-      try {
-        data = JSON.parse(body);
-      } catch {
-        return sendJson(res, 400, { error: "Invalid JSON" });
-      }
-
-      if (typeof data.title !== "string" || !data.title.trim()) {
-        return sendJson(res, 400, { error: "Field 'title' is required" });
-      }
-
-      const result = await pool.query(
-        "INSERT INTO tasks (title) VALUES ($1) RETURNING id, title, completed",
-        [data.title.trim()]
-      );
-
-      return sendJson(res, 201, result.rows[0]);
+      return sendJson(res, 404, { error: "Not found" });
+    } catch (error) {
+      console.error("Request failed:", error.message);
+      return sendJson(res, 500, { error: "Internal server error" });
     }
+  });
+}
 
-    return sendJson(res, 404, { error: "Not found" });
-  } catch (error) {
-    console.error("Request failed:", error.message);
-    return sendJson(res, 500, { error: "Internal server error" });
-  }
-});
+const server = createServer(pool);
 
 async function start() {
   await initializeDatabase();
@@ -94,17 +98,20 @@ async function start() {
   });
 }
 
-start().catch((error) => {
-  console.error("Failed to start application:", error.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  start().catch((error) => {
+    console.error("Failed to start application:", error.message);
+    process.exit(1);
+  });
 
-async function shutdown() {
-  server.close();
-  await pool.end();
-  process.exit(0);
+  async function shutdown() {
+    server.close();
+    await pool.end();
+    process.exit(0);
+  }
+
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 }
 
-process.on("SIGTERM", shutdown);
-process.on("SIGINT", shutdown);
-
+module.exports = { createServer };
