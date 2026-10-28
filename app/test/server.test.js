@@ -102,3 +102,18 @@ test("unknown route returns 404", async () => {
     assert.deepEqual(await response.json(), { error: "Not found" });
   });
 });
+
+test("GET /version returns service version", async () => {
+  const database = { query: async () => ({ rows: [] }) };
+
+  await withServer(database, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/version`);
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(body, {
+      service: "task-api",
+      version: "dev",
+    });
+  });
+});

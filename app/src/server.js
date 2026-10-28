@@ -43,6 +43,12 @@ function createServer(database) {
           database: "connected",
         });
       }
+      if (req.method === "GET" && url.pathname === "/version") {
+        return sendJson(res, 200, {
+          service: "task-api",
+          version: process.env.APP_VERSION || "dev",
+        });
+      }
 
       if (req.method === "GET" && url.pathname === "/tasks") {
         const result = await database.query(
