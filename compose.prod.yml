@@ -1,7 +1,7 @@
 
 services:
   app:
-    image: ghcr.io/mcfarlandcathy/devops-lab:71fc335d027f66c5fc4da1ef1b7f8ecf9f44324d
+    image: ghcr.io/mcfarlandcathy/devops-lab:ccf768120e813aeab0c8b26e65251cd624a155bc
     container_name: task-api-prod
     ports:
       - "3001:3000"
@@ -9,7 +9,7 @@ services:
       PORT: 3000
       NODE_ENV: production
       DB_HOST: db
-      APP_VERSION: 71fc335d027f66c5fc4da1ef1b7f8ecf9f44324d
+      APP_VERSION: ccf768120e813aeab0c8b26e65251cd624a155bc
       DB_PORT: 5432
       DB_NAME: taskdb
       DB_USER: taskuser
