@@ -41,12 +41,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build image with Kaniko
-        uses: docker://gcr.io/kaniko-project/executor:v1.24.0
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
         with:
-          args: >-
-            --context=dir://${{ gitverse.workspace }}/app
-            --dockerfile=${{ gitverse.workspace }}/app/Dockerfile
-            --destination=task-api:ci
-            --no-push
-            --verbosity=info
+          context: ./app
+          push: false
+          tags: task-api:ci
