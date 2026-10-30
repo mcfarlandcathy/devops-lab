@@ -33,6 +33,33 @@ jobs:
         working-directory: app
         run: npm test
 
+  frontend:
+    name: Test frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run linter
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
   build-image:
     name: Build Docker image
     runs-on: ubuntu-latest
@@ -48,10 +75,25 @@ jobs:
           push: false
           tags: task-api:ci
 
+  build-frontend-image:
+    name: Build frontend Docker image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build frontend Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          tags: task-frontend:ci
+
   publish-image:
     name: Publish image to GHCR
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [test, build-image]
+    needs: [test, build-image, frontend, build-frontend-image]
     runs-on: ubuntu-latest
     permissions:
       contents: read

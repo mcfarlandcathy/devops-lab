@@ -8,26 +8,35 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  async function loadTasks() {
-    try {
-      setError('')
-      const response = await fetch('/tasks')
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
-      const data = await response.json()
-      setTasks(data)
-    } catch (err) {
-      setError(`Не удалось загрузить задачи: ${err.message}`)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
+    const controller = new AbortController()
+
+    async function loadTasks() {
+      try {
+        const response = await fetch('/tasks', {
+          signal: controller.signal,
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+
+        const data = await response.json()
+        setTasks(data)
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          setError(`Не удалось загрузить задачи: ${err.message}`)
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false)
+        }
+      }
+    }
+
     loadTasks()
+
+    return () => controller.abort()
   }, [])
 
   async function addTask(event) {
