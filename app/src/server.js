@@ -1,8 +1,27 @@
-
 const http = require("node:http");
 const { Pool } = require("pg");
+const client = require("prom-client");
 
 const PORT = Number(process.env.PORT) || 3000;
+
+const register = new client.Registry();
+
+client.collectDefaultMetrics({ register });
+
+const httpRequestsTotal = new client.Counter({
+  name: "http_requests_total",
+  help: "Total number of HTTP requests",
+  labelNames: ["method", "route", "status_code"],
+  registers: [register],
+});
+
+const httpRequestDuration = new client.Histogram({
+  name: "http_request_duration_seconds",
+  help: "HTTP request duration in seconds",
+  labelNames: ["method", "route", "status_code"],
+  registers: [register],
+  buckets: [0.005, 0.01, 0.05, 0.1, 0.5, 1, 2, 5],
+});
 
 const pool = new Pool({
   host: process.env.DB_HOST || "localhost",
@@ -34,7 +53,39 @@ function createServer(database) {
   return http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
 
+    // Не учитываем сам endpoint метрик, чтобы он не влиял на статистику.
+    if (url.pathname !== "/metrics") {
+      const startTime = process.hrtime.bigint();
+
+      const knownRoutes = ["/health", "/version", "/tasks"];
+      const route = knownRoutes.includes(url.pathname)
+        ? url.pathname
+        : "not_found";
+
+      res.once("finish", () => {
+        const labels = {
+          method: req.method,
+          route,
+          status_code: String(res.statusCode),
+        };
+
+        httpRequestsTotal.inc(labels);
+
+        const duration =
+          Number(process.hrtime.bigint() - startTime) / 1e9;
+
+        httpRequestDuration.observe(labels, duration);
+      });
+    }
+
     try {
+      if (req.method === "GET" && url.pathname === "/metrics") {
+        res.writeHead(200, {
+          "Content-Type": register.contentType,
+        });
+        return res.end(await register.metrics());
+      }
+
       if (req.method === "GET" && url.pathname === "/health") {
         await database.query("SELECT 1");
         return sendJson(res, 200, {
@@ -43,6 +94,7 @@ function createServer(database) {
           database: "connected",
         });
       }
+
       if (req.method === "GET" && url.pathname === "/version") {
         return sendJson(res, 200, {
           service: "task-api",
