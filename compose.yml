@@ -33,7 +33,6 @@ services:
 
   db:
     image: postgres:16-alpine
-    container_name: task-db
     environment:
       POSTGRES_DB: taskdb
       POSTGRES_USER: taskuser
@@ -45,6 +44,18 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    image: task-frontend:1.0
+    container_name: task-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      app:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
