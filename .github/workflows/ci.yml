@@ -118,3 +118,11 @@ jobs:
           tags: |
             ghcr.io/mcfarlandcathy/devops-lab:latest
             ghcr.io/mcfarlandcathy/devops-lab:${{ github.sha }}
+      - name: Build and push frontend Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ghcr.io/mcfarlandcathy/devops-lab-frontend:latest
+            ghcr.io/mcfarlandcathy/devops-lab-frontend:${{ github.sha }}
