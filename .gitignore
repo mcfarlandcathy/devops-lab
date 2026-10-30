@@ -1,3 +1,4 @@
 .env
+.env.ghcr
 node_modules/
 npm-debug.log*
