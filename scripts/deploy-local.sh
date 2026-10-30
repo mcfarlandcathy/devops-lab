@@ -37,8 +37,31 @@ set_version() {
 
 rollback() {
     echo "Откатываемся на $OLD_VERSION..."
+
     set_version "$OLD_VERSION"
-    sudo "${COMPOSE[@]}" up -d --no-deps app frontend
+
+    if ! sudo "${COMPOSE[@]}" pull app frontend; then
+        echo "ОШИБКА: не удалось скачать предыдущие образы."
+        return 1
+    fi
+
+    if ! sudo "${COMPOSE[@]}" up -d --no-deps app frontend; then
+        echo "ОШИБКА: не удалось запустить предыдущую версию."
+        return 1
+    fi
+
+    for attempt in {1..30}; do
+        if curl -fsS http://localhost:3000/health >/dev/null \
+            && curl -fsS http://localhost:8080/ >/dev/null; then
+            echo "Откат успешен. Восстановлена версия: $OLD_VERSION"
+            return 0
+        fi
+
+        sleep 2
+    done
+
+    echo "ОШИБКА: предыдущая версия не прошла проверку."
+    return 1
 }
 
 echo "Обновляемся с $OLD_VERSION на $NEW_VERSION..."
@@ -60,7 +83,8 @@ fi
 echo "Проверяем API и frontend..."
 
 for attempt in {1..30}; do
-    if curl -fsS http://localhost:3000/health >/dev/null \
+    if [[ "${FORCE_DEPLOY_FAILURE:-0}" != "1" ]] \
+        && curl -fsS http://localhost:3000/health >/dev/null \
         && curl -fsS http://localhost:8080/ >/dev/null; then
         echo "Обновление успешно. Активная версия: $NEW_VERSION"
         exit 0
@@ -70,5 +94,10 @@ for attempt in {1..30}; do
 done
 
 echo "Проверка не пройдена."
-rollback
-exit 1
+
+if rollback; then
+    exit 1
+else
+    echo "ВНИМАНИЕ: автоматический откат не завершился."
+    exit 2
+fi
